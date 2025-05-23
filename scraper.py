@@ -6,15 +6,13 @@ import re
 import time
 from urllib.parse import urljoin
 
+import chromedriver_autoinstaller  # new!
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import NoSuchElementException, JavascriptException, TimeoutException
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-
-from webdriver_manager.chrome import ChromeDriverManager  # new!
 
 # ─── Credentials from env ─────────────────────────────────────────────────────
 USERNAME = os.getenv("T4E_USER")
@@ -33,15 +31,18 @@ def clean_text(s: str) -> str:
         s = re.sub(pat, rep, s)
     return re.sub(r"\s{2,}", " ", s).strip()
 
-# ─── Updated start_driver() ────────────────────────────────────────────────────
+# ─── Updated start_driver() uses chromedriver_autoinstaller ───────────────────
 def _start_driver():
+    # install a matching chromedriver (will be placed on PATH)
+    chromedriver_autoinstaller.install()
+
     opts = Options()
     opts.headless = True
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-gpu")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,800")
-    # point at Streamlit Cloud’s chromium binary; works locally too if installed
+    # on Streamlit Cloud the binary is chromium-browser; locally you can install chromium too
     opts.binary_location = "/usr/bin/chromium-browser"
 
     # disable images for speed
@@ -51,9 +52,7 @@ def _start_driver():
     # return once DOMContentLoaded
     opts.set_capability("pageLoadStrategy", "eager")
 
-    # auto-download matching chromedriver
-    service = Service(ChromeDriverManager().install())
-    driver = webdriver.Chrome(service=service, options=opts)
+    driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(30)
     return driver
 
@@ -78,8 +77,10 @@ def _login(driver):
 # ─── Find solution URL ─────────────────────────────────────────────────────────
 def _find_solution_url(driver, difficulty, area_text, chapter_name):
     driver.get("https://www.time4education.com/local/timecms/cat_sectionaltest.php")
-    WebDriverWait(driver, 7).until(EC.presence_of_element_located((By.ID, "ltestCat")))
-    Select(driver.find_element(By.ID, "ltestCat")).select_by_visible_text(difficulty)
+    Select(WebDriverWait(driver,7).until(
+        EC.presence_of_element_located((By.ID, "ltestCat"))
+    )).select_by_visible_text(difficulty)
+
     WebDriverWait(driver, 7).until(lambda d: len(
         d.find_element(By.ID, "areatype").find_elements(By.TAG_NAME, "option")
     ) > 1)
@@ -92,8 +93,9 @@ def _find_solution_url(driver, difficulty, area_text, chapter_name):
         rows = driver.find_elements(By.CSS_SELECTOR, "div.cat-tbl tbody tr")
         for r in rows:
             if r.find_element(By.CSS_SELECTOR, "td:nth-child(2)").text.strip().lower() == tgt:
-                return r.find_element(By.CSS_SELECTOR, "td:nth-child(4) a#solutionlink")\
-                        .get_attribute("href")
+                return r.find_element(
+                    By.CSS_SELECTOR, "td:nth-child(4) a#solutionlink"
+                ).get_attribute("href")
         try:
             nxt = driver.find_element(By.ID, "nxtbtn")
             if nxt.is_displayed():
