@@ -2,3 +2,4 @@ streamlit
 selenium
 urllib3
 beautifulsoup4
+streamlit-option-menu
