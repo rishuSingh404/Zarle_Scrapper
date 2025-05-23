@@ -4,9 +4,10 @@ import os
 import uuid
 import re
 import time
+import shutil
 from urllib.parse import urljoin
 
-import chromedriver_autoinstaller  # new!
+import chromedriver_autoinstaller
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import NoSuchElementException, JavascriptException, TimeoutException
@@ -23,7 +24,7 @@ REPLACEMENTS = [
     (r"\[",    ""), (r"\]",    ""),
     (r"\{",    ""), (r"\}",    ""),
     (r"□",     " of "), (r"–", "-"),
-    (r"\+",    "+"), (r"×",   "*"),
+    (r"\+",    "+"),  (r"×",   "*"),
     (r"\\frac\{(\d+)\}\{(\d+)\}", r"\1/\2"),
 ]
 def clean_text(s: str) -> str:
@@ -31,9 +32,9 @@ def clean_text(s: str) -> str:
         s = re.sub(pat, rep, s)
     return re.sub(r"\s{2,}", " ", s).strip()
 
-# ─── Updated start_driver() uses chromedriver_autoinstaller ───────────────────
+# ─── Start headless Chrome with dynamic binary lookup ─────────────────────────
 def _start_driver():
-    # install a matching chromedriver (will be placed on PATH)
+    # 1) ensure a matching chromedriver is on PATH
     chromedriver_autoinstaller.install()
 
     opts = Options()
@@ -42,15 +43,24 @@ def _start_driver():
     opts.add_argument("--disable-gpu")
     opts.add_argument("--disable-dev-shm-usage")
     opts.add_argument("--window-size=1280,800")
-    # on Streamlit Cloud the binary is chromium-browser; locally you can install chromium too
-    opts.binary_location = "/usr/bin/chromium-browser"
-
-    # disable images for speed
     opts.add_experimental_option("prefs", {
         "profile.managed_default_content_settings.images": 2
     })
-    # return once DOMContentLoaded
     opts.set_capability("pageLoadStrategy", "eager")
+
+    # 2) dynamically find chromium/chrome binary
+    chrome_path = (
+        shutil.which("chromium-browser") or
+        shutil.which("chromium") or
+        shutil.which("google-chrome-stable") or
+        shutil.which("google-chrome")
+    )
+    if not chrome_path:
+        raise FileNotFoundError(
+            "No Chrome/Chromium binary found. "
+            "On Streamlit Cloud add an apt.txt containing 'chromium-browser' & 'chromium-driver'."
+        )
+    opts.binary_location = chrome_path
 
     driver = webdriver.Chrome(options=opts)
     driver.set_page_load_timeout(30)
@@ -62,9 +72,12 @@ def _login(driver):
     WebDriverWait(driver, 10).until(
         EC.element_to_be_clickable((By.CSS_SELECTOR, "a[data-bs-toggle='modal']"))
     ).click()
-    WebDriverWait(driver, 10).until(EC.visibility_of_element_located((By.CSS_SELECTOR, "#login")))
+    WebDriverWait(driver, 10).until(
+        EC.visibility_of_element_located((By.CSS_SELECTOR, "#login"))
+    )
     driver.find_element(By.NAME, "username").send_keys(USERNAME)
     driver.find_element(By.NAME, "password").send_keys(PASSWORD)
+
     try:
         driver.set_page_load_timeout(30)
         driver.find_element(By.CSS_SELECTOR, "input[type=submit]").click()
@@ -72,14 +85,14 @@ def _login(driver):
         pass
     finally:
         driver.set_page_load_timeout(10)
+
     WebDriverWait(driver, 15).until(lambda d: "course=MOCK25" in d.current_url)
 
 # ─── Find solution URL ─────────────────────────────────────────────────────────
 def _find_solution_url(driver, difficulty, area_text, chapter_name):
     driver.get("https://www.time4education.com/local/timecms/cat_sectionaltest.php")
-    Select(WebDriverWait(driver,7).until(
-        EC.presence_of_element_located((By.ID, "ltestCat"))
-    )).select_by_visible_text(difficulty)
+    WebDriverWait(driver, 7).until(EC.presence_of_element_located((By.ID, "ltestCat")))
+    Select(driver.find_element(By.ID, "ltestCat")).select_by_visible_text(difficulty)
 
     WebDriverWait(driver, 7).until(lambda d: len(
         d.find_element(By.ID, "areatype").find_elements(By.TAG_NAME, "option")
@@ -104,9 +117,10 @@ def _find_solution_url(driver, difficulty, area_text, chapter_name):
                 continue
         except NoSuchElementException:
             break
+
     raise RuntimeError(f"Chapter '{chapter_name}' not found")
 
-# ─── Parse a single question ───────────────────────────────────────────────────
+# ─── Parse one question ────────────────────────────────────────────────────────
 def _parse_question(driver, test_id, qnum):
     driver.execute_script(f"show_sol({test_id},{qnum});")
     time.sleep(0.2)
