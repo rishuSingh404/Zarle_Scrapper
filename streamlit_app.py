@@ -3,7 +3,7 @@
 import os, json, tempfile
 import streamlit as st
 from streamlit_option_menu import option_menu
-from scraper import run_scraper, list_difficulties, list_areas, list_chapters
+from scraper import run_scraper
 
 # ─── Page / Theme ─────────────────────────────────────────────────────────────
 st.set_page_config("Zarle Scraper", "🤖", "wide", initial_sidebar_state="expanded")
@@ -12,7 +12,12 @@ st.markdown("""
 .stApp { background-color:#121212; color:#EEE; }
 [data-testid="stSidebar"]{background-color:#1F1F1F;padding-top:1rem;}
 header{visibility:hidden;} .block-container{padding-top:0rem;}
-button[kind="primary"]{background-color:#9C27B0!important;}
+.stFileUploader>label{width:100%;padding:1rem;background-color:#212121;
+border:2px dashed #444;border-radius:8px;color:#CCC;}
+button[kind="primary"]{background-color:#9C27B0!important;color:white!important;
+font-weight:bold;border:none;border-radius:8px;padding:0.6em 1.4em;
+transition:background-color .3s ease,transform .2s ease;}
+button[kind="primary"]:hover{background-color:#BA68C8!important;transform:scale(1.03);}
 </style>
 """, unsafe_allow_html=True)
 
@@ -46,31 +51,14 @@ with st.sidebar:
 if selected == "Scrape Questions":
     st.header("📥  Scrape Sectional Solutions")
 
-    # 1) Difficulty dropdown with fallback
-    try:
-        options_diff = list_difficulties()
-        difficulty = st.selectbox("Difficulty", options_diff)
-    except Exception:
-        difficulty = st.text_input("Difficulty", value="Foundation (Topic-based)")
-
-    # 2) Area dropdown with fallback
-    try:
-        options_area = list_areas(difficulty)
-        area_text = st.selectbox("Area", options_area)
-    except Exception:
-        area_text = st.text_input("Area Text", value="Quantitative Ability")
-
-    # 3) Chapter dropdown with fallback
-    try:
-        options_ch = list_chapters(difficulty, area_text)
-        chapter_name = st.selectbox("Chapter", options_ch)
-    except Exception:
-        chapter_name = st.text_input("Chapter Name", value="Numbers")
-
-    level  = st.number_input("Level (int)", 1, 10, 2)
-    qtype  = st.number_input("Question Type (int)", 1, 10, 1)
+    difficulty   = st.text_input("Difficulty",    value="Foundation (Topic-based)")
+    area_text    = st.text_input("Area Text",     value="Quantitative Ability")
+    chapter_name = st.text_input("Chapter Name",  value="Numbers")
+    level        = st.number_input("Level (int)",  min_value=1, max_value=10, value=2)
+    qtype        = st.number_input("Question Type (int)", min_value=1, max_value=10, value=1)
 
     run = st.button("Run Scraper  ⏳", type="primary")
+
     if run:
         with st.spinner("⏳ Scraping in progress…"):
             try:
@@ -89,11 +77,12 @@ if selected == "Scrape Questions":
         st.markdown("**Preview (first 3 questions):**")
         st.json(data[:3])
 
-        tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w")
-        json.dump(data, tmp, ensure_ascii=False, indent=2)
-        tmp.close()
+        # write to a temp file for download
+        tmp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".json", mode="w", encoding="utf-8")
+        json.dump(data, tmp_out, ensure_ascii=False, indent=2)
+        tmp_out.close()
 
-        with open(tmp.name, "rb") as f:
+        with open(tmp_out.name, "rb") as f:
             st.download_button(
                 "⬇️  Download JSON",
                 data=f,
