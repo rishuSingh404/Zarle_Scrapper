@@ -1,12 +1,9 @@
+# streamlit_app.py
+
 import os, json, tempfile
 import streamlit as st
 from streamlit_option_menu import option_menu
-from scraper import (
-    run_scraper,
-    list_difficulties,
-    list_areas,
-    list_chapters,
-)
+from scraper import run_scraper, list_difficulties, list_areas, list_chapters
 
 # ─── Page / Theme ─────────────────────────────────────────────────────────────
 st.set_page_config("Zarle Scraper", "🤖", "wide", initial_sidebar_state="expanded")
@@ -45,31 +42,30 @@ with st.sidebar:
         },
     )
 
-# ─── Cached dropdown fetchers ─────────────────────────────────────────────────
-@st.cache_data(show_spinner=False)
-def get_difficulties():
-    return list_difficulties()
-
-@st.cache_data(show_spinner=False)
-def get_areas(diff):
-    return list_areas(diff)
-
-@st.cache_data(show_spinner=False)
-def get_chapters(diff, area):
-    return list_chapters(diff, area)
-
 # ─── Scrape Questions Panel ───────────────────────────────────────────────────
 if selected == "Scrape Questions":
     st.header("📥  Scrape Sectional Solutions")
 
-    difficulties = get_difficulties()
-    difficulty   = st.selectbox("Difficulty", difficulties)
+    # 1) Difficulty dropdown with fallback
+    try:
+        options_diff = list_difficulties()
+        difficulty = st.selectbox("Difficulty", options_diff)
+    except Exception:
+        difficulty = st.text_input("Difficulty", value="Foundation (Topic-based)")
 
-    areas = get_areas(difficulty)
-    area_text = st.selectbox("Area", areas)
+    # 2) Area dropdown with fallback
+    try:
+        options_area = list_areas(difficulty)
+        area_text = st.selectbox("Area", options_area)
+    except Exception:
+        area_text = st.text_input("Area Text", value="Quantitative Ability")
 
-    chapters = get_chapters(difficulty, area_text)
-    chapter_name = st.selectbox("Chapter", chapters)
+    # 3) Chapter dropdown with fallback
+    try:
+        options_ch = list_chapters(difficulty, area_text)
+        chapter_name = st.selectbox("Chapter", options_ch)
+    except Exception:
+        chapter_name = st.text_input("Chapter Name", value="Numbers")
 
     level  = st.number_input("Level (int)", 1, 10, 2)
     qtype  = st.number_input("Question Type (int)", 1, 10, 1)
