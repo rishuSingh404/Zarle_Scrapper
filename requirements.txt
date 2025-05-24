@@ -3,4 +3,4 @@ selenium
 beautifulsoup4
 streamlit-option-menu
 urllib3
-chromedriver-autoinstaller      # keep ONE driver manager only
+chromedriver-autoinstaller
