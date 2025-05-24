@@ -1,24 +1,23 @@
-# 1) Base image
+# ── 1) Base image ─────────────────────────────────────────────────────────────
 FROM python:3.11-slim
 
-# 2) Install Chromium + minimal deps for headless
+# ── 2) Install Chromium + libs ───────────────────────────────────────────────
 RUN apt-get update && apt-get install -y \
       chromium \
       fonts-liberation \
       libnss3 libatk-bridge2.0-0 libgtk-3-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# 3) Tell Selenium where to find Chrome
 ENV CHROME_BIN=/usr/bin/chromium
 
-# 4) Install Python deps
+# ── 3) Python deps ────────────────────────────────────────────────────────────
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 5) Copy your app
+# ── 4) Copy code ───────────────────────────────────────────────────────────────
 COPY . .
 
-# 6) Expose Streamlit port and run
+# ── 5) Expose & launch on Railway’s assigned port ─────────────────────────────
 EXPOSE 8501
-CMD ["streamlit", "run", "streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["sh","-c","streamlit run streamlit_app.py --server.address=0.0.0.0 --server.port $PORT"]
