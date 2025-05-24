@@ -4,7 +4,11 @@ import uuid
 import re
 import time
 from urllib.parse import urljoin
-
+import shutil
+import chromedriver_autoinstaller
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.chrome.service import Service
 import chromedriver_autoinstaller
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
@@ -63,23 +67,41 @@ def run_scraper(difficulty: str,
 
 # ─── Internal helpers ───────────────────────────────────────────────────────────
 def _start_driver():
-    # install matching chromedriver
-    path = chromedriver_autoinstaller.install()
-    service = Service(path)
+    """
+    Launches headless Chrome in Streamlit Cloud (or any Docker) by:
+      1. Installing the matching chromedriver
+      2. Detecting the installed Chromium/Chrome binary
+      3. Blocking images/styles/fonts
+      4. Using a lazier load strategy and longer timeout
+    """
+    # 1) Auto-install the chromedriver that matches the container’s Chromium
+    driver_path = chromedriver_autoinstaller.install()
+    service     = Service(driver_path)
 
+    # 2) Locate whichever Chrome/Chromium got installed
+    chrome_path = (
+        shutil.which("chromium-browser")
+        or shutil.which("chromium")
+        or shutil.which("google-chrome-stable")
+        or shutil.which("google-chrome")
+    )
+    if not chrome_path:
+        raise FileNotFoundError("No Chrome/Chromium binary found on PATH")
+
+    # 3) Configure headless options
     opts = Options()
-    opts.add_argument("--headless")
+    opts.binary_location = chrome_path
+    opts.add_argument("--headless")  # classic headless is more stable
     opts.add_argument("--no-sandbox")
     opts.add_argument("--disable-dev-shm-usage")
-    opts.set_capability("pageLoadStrategy", "none")
+    opts.set_capability("pageLoadStrategy", "none")  # only wait for your explicit waits
     opts.add_experimental_option("prefs", {
         "profile.managed_default_content_settings.images": 2,
         "profile.managed_default_content_settings.stylesheets": 2,
         "profile.managed_default_content_settings.fonts": 2,
     })
-    optsbinary = os.getenv("CHROME_BIN", "/usr/bin/chromium")
-    opts.binary_location = optsbinary
 
+    # 4) Launch and give plenty of time for slow containers
     driver = webdriver.Chrome(service=service, options=opts)
     driver.set_page_load_timeout(60)
     return driver
